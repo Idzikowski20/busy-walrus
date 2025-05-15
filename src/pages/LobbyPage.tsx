@@ -17,8 +17,10 @@ interface LobbyPlayer {
     id: string;
     lobby_id: string;
     user_id: string;
-    // Możesz dodać więcej pól gracza, np. name z tabeli profiles
-    profiles: { // Zakładamy, że masz tabelę profiles połączoną z auth.users
+    joined_at: string; // Dodano joined_at
+    is_ready: boolean; // Dodano is_ready
+    // Profil będzie dołączony po pobraniu
+    profiles: {
         first_name: string | null;
         last_name: string | null;
     } | null;
@@ -55,19 +57,41 @@ const LobbyPage = () => {
     enabled: !!lobbyId, // Tylko jeśli lobbyId jest dostępne
   });
 
-  // Fetch players in the lobby
-  const { data: players, isLoading: isLoadingPlayers, error: playersError } = useQuery<LobbyPlayer[]>({
+  // Fetch players in the lobby and their profiles
+  const { data: playersWithProfiles, isLoading: isLoadingPlayers, error: playersError } = useQuery<LobbyPlayer[]>({
     queryKey: ["lobbyPlayers", lobbyId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch lobby players to get user_ids
+      const { data: lobbyPlayers, error: lobbyPlayersError } = await supabase
         .from("lobby_players")
-        .select(`
-          *,
-          profiles (first_name, last_name)
-        `)
+        .select("id, lobby_id, user_id, joined_at, is_ready") // Select necessary fields including user_id
         .eq("lobby_id", lobbyId);
-      if (error) throw error;
-      return data;
+
+      if (lobbyPlayersError) throw lobbyPlayersError;
+
+      if (!lobbyPlayers || lobbyPlayers.length === 0) return [];
+
+      // Extract user_ids
+      const userIds = lobbyPlayers.map(p => p.user_id);
+
+      // 2. Fetch profiles for these user_ids
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name")
+        .in("id", userIds); // profiles.id is the user_id
+
+      if (profilesError) throw profilesError;
+
+      // 3. Map profiles back to lobby players
+      const playersWithProfiles = lobbyPlayers.map(lp => {
+        const profile = profiles?.find(p => p.id === lp.user_id);
+        return {
+          ...lp,
+          profiles: profile || null // Attach profile data
+        };
+      });
+
+      return playersWithProfiles;
     },
     enabled: !!lobbyId, // Tylko jeśli lobbyId jest dostępne
     refetchInterval: 2000, // Odświeżaj listę graczy co 2 sekundy
@@ -88,7 +112,7 @@ const LobbyPage = () => {
           if (error) throw error;
 
           // Jeśli gracz był twórcą i nie ma innych graczy, usuń lobby
-          if (lobby?.creator_id === user.id && players?.length === 1) {
+          if (lobby?.creator_id === user.id && playersWithProfiles?.length === 1) {
                await supabase.from("lobbies").delete().eq("id", lobbyId);
           }
       },
@@ -133,7 +157,7 @@ const LobbyPage = () => {
   };
 
   const isCreator = currentUserId && lobby?.creator_id === currentUserId;
-  const canStartGame = isCreator && (players?.length || 0) >= 2;
+  const canStartGame = isCreator && (playersWithProfiles?.length || 0) >= 2;
 
 
   if (isLoadingLobby || isLoadingPlayers) return <div>Ładowanie lobby...</div>;
@@ -148,11 +172,11 @@ const LobbyPage = () => {
 
       <Card className="mb-6 max-w-md mx-auto">
         <CardHeader>
-          <CardTitle>Gracze w Lobby ({players?.length || 0})</CardTitle>
+          <CardTitle>Gracze w Lobby ({playersWithProfiles?.length || 0})</CardTitle>
         </CardHeader>
         <CardContent>
           <ul>
-            {players?.map(player => (
+            {playersWithProfiles?.map(player => (
               <li key={player.id} className="text-lg">
                 {player.profiles?.first_name || player.user_id} {player.profiles?.last_name}
                 {player.user_id === lobby.creator_id && " (Twórca)"}
@@ -180,7 +204,7 @@ const LobbyPage = () => {
           </Button>
       </div>
 
-        {isCreator && (players?.length || 0) < 2 && (
+        {isCreator && (playersWithProfiles?.length || 0) < 2 && (
             <p className="text-center mt-4 text-sm text-gray-600">Potrzeba co najmniej 2 graczy, aby rozpocząć grę.</p>
         )}
 
