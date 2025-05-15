@@ -148,6 +148,11 @@ const LobbyListPage = () => {
       lobbyPlayers?.some(player => player.lobby_id === lobby.id && player.user_id === lobby.creator_id)
   );
 
+  // Funkcja do zliczania graczy w danym lobby
+  const countPlayersInLobby = (lobbyId: string) => {
+      return lobbyPlayers?.filter(player => player.lobby_id === lobbyId).length || 0;
+  };
+
 
   if (isLoadingLobbies || isLoadingPlayers) return <div>Ładowanie lobby...</div>;
   if (lobbiesError) return <div>Wystąpił błąd podczas ładowania lobby: {lobbiesError.message}</div>;
@@ -192,7 +197,7 @@ const LobbyListPage = () => {
                 <CardTitle>{lobby.name}</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-between items-center">
-                <p className="text-sm text-gray-500">Status: {lobby.status}</p>
+                <p className="text-sm text-gray-500">Graczy: {countPlayersInLobby(lobby.id)}</p> {/* Wyświetlanie liczby graczy */}
                 <Button onClick={() => handleJoinLobby(lobby.id)} disabled={joinLobbyMutation.isPending}>
                   Dołącz
                 </Button>
