@@ -246,24 +246,26 @@ const GameLayout = () => {
       {/* Główny obszar gry: Rysunek i Panel boczny (Czat + Gracze) */}
       <div className="flex flex-1 gap-4">
         {/* Obszar rysowania */}
-        <div className="flex-1 bg-white rounded-lg shadow-md p-4 flex items-center justify-center relative"> {/* Dodano relative */}
+        {/* Dodano klasy border-2, border-black, shadow-lg, rounded-lg */}
+        <div className="flex-1 bg-white border-2 border-black shadow-lg rounded-lg p-4 flex items-center justify-center relative">
           {/* Canvas do rysowania */}
           <canvas
             ref={canvasRef}
             className="absolute top-0 left-0 w-full h-full" // Ustawienie canvasu na absolutne i wypełnienie kontenera
           ></canvas>
-           {/* Usunięto placeholder */}
         </div>
 
         {/* Panel boczny: Czat i Lista graczy */}
         <div className="w-80 flex flex-col gap-4">
           {/* Wyświetlanie słowa do zgadnięcia */}
-          <div className="bg-white rounded-lg shadow-md p-4 text-center text-xl font-semibold">
+          {/* Dodano klasy border-2, border-black, shadow-lg, rounded-lg */}
+          <div className="bg-white border-2 border-black shadow-lg rounded-lg p-4 text-center text-xl font-semibold">
             Słowo: {maskedWord} {/* Wyświetlanie zamaskowanego słowa */}
           </div>
 
           {/* Czat */}
-          <div className="flex-1 bg-white rounded-lg shadow-md p-4 flex flex-col">
+          {/* Dodano klasy border-2, border-black, shadow-lg, rounded-lg */}
+          <div className="flex-1 bg-white border-2 border-black shadow-lg rounded-lg p-4 flex flex-col">
             <h3 className="text-lg font-semibold mb-2">Czat</h3>
             {/* Wiadomości czatu */}
             <div className="flex-1 overflow-y-auto border-b pb-2 mb-2">
@@ -277,19 +279,22 @@ const GameLayout = () => {
             </div>
             {/* Formularz do wprowadzania czatu */}
             <form onSubmit={handleSendMessage} className="flex gap-2">
+              {/* Dodano klasy border-2, border-black, rounded */}
               <input
                 type="text"
                 placeholder="Wpisz zgadywane słowo lub wiadomość"
-                className="flex-1 p-2 border rounded"
+                className="flex-1 p-2 border-2 border-black rounded"
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)} // Poprawione tutaj
+                onChange={(e) => setNewMessage(e.target.value)}
               />
-              <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Wyślij</button>
+              {/* Dodano klasy border-2, border-black, shadow-md */}
+              <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 border-2 border-black shadow-md">Wyślij</button>
             </form>
           </div>
 
           {/* Lista graczy */}
-          <div className="bg-white rounded-lg shadow-md p-4">
+          {/* Dodano klasy border-2, border-black, shadow-lg, rounded-lg */}
+          <div className="bg-white border-2 border-black shadow-lg rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-2">Gracze</h3>
             {/* Placeholder na listę graczy */}
             <ul>

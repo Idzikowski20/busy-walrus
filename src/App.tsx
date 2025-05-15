@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth"; // Import nowej strony Auth
 import { supabase } from "./integrations/supabase/client"; // Import klienta Supabase
-import { SessionContextProvider } from '@supabase/auth-ui-react'; // Import SessionContextProvider
+// Usunięto: import { SessionContextProvider } from '@supabase/auth-ui-react'; // Import SessionContextProvider
 import { useEffect, useState } from "react";
 import { Session } from "@supabase/supabase-js";
 
@@ -51,7 +51,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <SessionContextProvider supabaseClient={supabase}> {/* Wrap app with SessionContextProvider */}
+      {/* Usunięto: <SessionContextProvider supabaseClient={supabase}> */}
         <BrowserRouter>
           <Routes>
             {/* Trasy chronione - wymagają zalogowania */}
@@ -67,7 +67,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-      </SessionContextProvider>
+      {/* Usunięto: </SessionContextProvider> */}
     </TooltipProvider>
   </QueryClientProvider>
 );
