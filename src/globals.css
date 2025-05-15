@@ -96,56 +96,6 @@
   }
 
   body {
-    @apply bg-background text-foreground font-['Permanent_Marker'], cursive; /* Zastosowanie czcionki */
-  }
-}
-
-/* Dodatkowe style dla efektu rysunkowego */
-.drawing-border {
-  box-shadow: 5px 5px 0px 0px rgba(0,0,0,0.75); /* Prosty cień przypominający kreskę */
-  border: 2px solid black; /* Czarna ramka */
-}
-
-@layer components {
-  .drawing-card {
-    @apply bg-white rounded-lg shadow-md p-4 drawing-border; /* Klasa łącząca style */
-  }
-}
-
-
-@layer components {
-  .drawing-button {
-    @apply px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 drawing-border; /* Styl dla przycisku */
-  }
-}
-
-
-@layer components {
-  .drawing-input {
-    @apply flex-1 p-2 border rounded drawing-border; /* Styl dla inputu */
-  }
-}
-
-
-@layer components {
-  .drawing-chat-message {
-    @apply text-gray-600; /* Podstawowy styl wiadomości */
-  }
-  .drawing-chat-sender {
-    @apply font-semibold; /* Styl dla nadawcy */
-  }
-}
-
-
-@layer components {
-  .drawing-player-item {
-    @apply text-gray-700; /* Styl dla elementu listy graczy */
-  }
-}
-
-
-@layer components {
-  .drawing-header {
-    @apply text-2xl font-bold; /* Styl dla nagłówka */
+    @apply bg-background text-foreground;
   }
 }
