@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { RealtimeChannel } from "@supabase/supabase-js"; // Import RealtimeChannel
 
 interface Lobby {
   id: string;
@@ -32,6 +33,7 @@ const LobbyPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [lobbyChannel, setLobbyChannel] = useState<RealtimeChannel | null>(null); // Stan na kanał Realtime
 
   useEffect(() => {
       const fetchUser = async () => {
@@ -41,6 +43,45 @@ const LobbyPage = () => {
       fetchUser();
   }, []);
 
+  // --- Realtime Subscription ---
+  useEffect(() => {
+    if (!lobbyId) return;
+
+    // Utwórz kanał dla konkretnego lobby
+    const channel = supabase.channel(`lobby:${lobbyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'lobbies',
+          filter: `id=eq.${lobbyId}` // Filtruj tylko zmiany dla tego lobby
+        },
+        (payload) => {
+          console.log('Lobby update received:', payload);
+          const updatedLobby = payload.new as Lobby;
+          // Jeśli status zmienił się na 'in-game', przekieruj gracza
+          if (updatedLobby.status === 'in-game') {
+            toast.info("Gra się rozpoczyna!");
+            // TODO: Zmień na odpowiednią trasę gry multiplayer, przekazując ID lobby
+            navigate(`/game/solo`); // Tymczasowo przekierowujemy do gry solo
+          }
+          // Możesz też zaktualizować cache react-query, jeśli potrzebujesz
+          queryClient.invalidateQueries({ queryKey: ["lobby", lobbyId] });
+        }
+      )
+      .subscribe(); // Subskrybuj zmiany
+
+    setLobbyChannel(channel); // Zapisz kanał w stanie
+
+    // Funkcja czyszcząca subskrypcję przy odmontowaniu komponentu
+    return () => {
+      if (lobbyChannel) {
+        supabase.removeChannel(lobbyChannel);
+        setLobbyChannel(null);
+      }
+    };
+  }, [lobbyId, navigate, queryClient]); // Zależności hooka
 
   // Fetch lobby details
   const { data: lobby, isLoading: isLoadingLobby, error: lobbyError } = useQuery<Lobby>({
@@ -127,19 +168,24 @@ const LobbyPage = () => {
       }
   });
 
-  // Mutation to start the game
+  // Mutation to start the game - NOW UPDATES LOBBY STATUS
   const startGameMutation = useMutation({
       mutationFn: async () => {
           if (!lobbyId) throw new Error("Lobby ID missing");
-          // TODO: Zaimplementować logikę rozpoczęcia gry (np. zmiana statusu lobby, utworzenie sesji gry)
-          console.log(`Starting game for lobby ${lobbyId}`);
-          toast.info("Rozpoczynanie gry... (placeholder)");
-          // Po rozpoczęciu gry, przekieruj graczy do ekranu gry, np. /game/multiplayer/:lobbyId
-          // Na razie przekierujemy do gry solo jako placeholder
-          navigate(`/game/solo`); // Zmień na odpowiednią trasę multiplayer
+          // Zmień status lobby na 'in-game'
+          const { data, error } = await supabase
+            .from("lobbies")
+            .update({ status: 'in-game' })
+            .eq("id", lobbyId)
+            .select()
+            .single();
+
+          if (error) throw error;
+          return data;
       },
       onSuccess: () => {
-          // Możesz tutaj zrobić coś po pomyślnym rozpoczęciu gry, np. zaktualizować status lobby
+          // Subskrypcja Realtime zajmie się przekierowaniem wszystkich graczy
+          toast.info("Status lobby zmieniony na 'in-game'. Gra powinna się rozpocząć dla wszystkich.");
           queryClient.invalidateQueries({ queryKey: ["lobbies"] });
       },
       onError: (err) => {
@@ -178,6 +224,7 @@ const LobbyPage = () => {
           <ul>
             {playersWithProfiles?.map(player => (
               <li key={player.id} className="text-lg">
+                {/* Wyświetl pseudonim z profilu, jeśli dostępny, w przeciwnym razie user_id */}
                 {player.profiles?.first_name || player.user_id} {player.profiles?.last_name}
                 {player.user_id === lobby.creator_id && " (Twórca)"}
               </li>
@@ -192,7 +239,7 @@ const LobbyPage = () => {
                   onClick={handleStartGame}
                   disabled={!canStartGame || startGameMutation.isPending}
               >
-                  {startGameMutation.isPending ? "Rozpoczynanie..." : "Rozpocznij Grę"}
+                  {startGameGameMutation.isPending ? "Rozpoczynanie..." : "Rozpocznij Grę"}
               </Button>
           )}
           <Button
