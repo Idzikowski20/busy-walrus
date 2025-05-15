@@ -202,9 +202,9 @@ const LobbyPage = () => {
   };
 
   const isCreator = currentUserId && lobby?.creator_id === currentUserId;
-  // Możliwość rozpoczęcia gry tylko gdy jest co najmniej 2 graczy i wszyscy są gotowi (TODO: dodać status gotowości)
-  // Na razie sprawdzamy tylko liczbę graczy
-  const canStartGame = isCreator && (playersWithProfiles?.length || 0) >= 2;
+  // Możliwość rozpoczęcia gry tylko gdy jest co najmniej 2 graczy (standard)
+  // LUB gdy użytkownik jest twórcą (dla testów solo)
+  const canStartGame = isCreator && ((playersWithProfiles?.length || 0) >= 2 || (playersWithProfiles?.length || 0) === 1);
 
 
   if (isLoadingLobby || isLoadingPlayers) return <div>Ładowanie lobby...</div>;
@@ -253,7 +253,7 @@ const LobbyPage = () => {
       </div>
 
         {isCreator && (playersWithProfiles?.length || 0) < 2 && (
-            <p className="text-center mt-4 text-sm text-gray-600">Potrzeba co najmniej 2 graczy, aby rozpocząć grę.</p>
+            <p className="text-center mt-4 text-sm text-gray-600">Potrzeba co najmniej 2 graczy, aby rozpocząć grę (w trybie multiplayer). Możesz rozpocząć grę solo jako twórca w celach testowych.</p>
         )}
 
     </div>
