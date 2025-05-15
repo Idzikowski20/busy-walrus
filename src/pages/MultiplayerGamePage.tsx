@@ -171,6 +171,25 @@ const MultiplayerGamePage = () => {
       }
   });
 
+  // Fetch current user's profile to get current stats for updating
+  const { data: profile } = useQuery({
+      queryKey: ["profile", currentUserId],
+      queryFn: async () => {
+          if (!currentUserId) return null;
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("wins, losses, desertions")
+            .eq("id", currentUserId)
+            .single();
+          if (error) {
+              console.error("Error fetching profile for stats update:", error);
+              return null;
+          }
+          return data;
+      },
+      enabled: !!currentUserId,
+  });
+
 
   // --- Realtime Subscription for Player Changes (Desertion Detection) ---
   useEffect(() => {
@@ -267,25 +286,34 @@ const MultiplayerGamePage = () => {
 
   // --- Logika gry multiplayer (podstawowa inicjacja) ---
   useEffect(() => {
+      console.log("MultiplayerGamePage state update:", {
+          gameState,
+          players: players.map(p => ({ id: p.id, name: p.name, isDrawing: p.isDrawing })), // Log relevant player info
+          currentDrawerId,
+          isPlayerTurn,
+          timeLeft,
+          round
+      });
+
       if (gameState === 'in-game' && players.length > 0 && currentDrawerId === null) {
-          // Gra się rozpoczęła i gracze są załadowani, ale pierwszy rysujący nie został wybrany
-          // Wybierz losowo pierwszego gracza do rysowania
+          console.log("Initializing first round...");
           const firstDrawer = players[Math.floor(Math.random() * players.length)];
+          console.log("First drawer selected:", firstDrawer.name, "ID:", firstDrawer.id);
           setCurrentDrawerId(firstDrawer.id);
-          setRound(1); // Rozpocznij pierwszą rundę
-          setTimeLeft(60); // Ustaw czas na rundę
+          setRound(1);
+          setTimeLeft(60);
           setChatMessages([{ id: 1, sender: 'System', text: `Rozpoczęto grę! Rysuje: ${firstDrawer.name}` }]);
           // TODO: W tym miejscu gracz rysujący powinien wybrać słowo, a pozostali zobaczyć zamaskowane słowo.
           // To będzie wymagało synchronizacji przez Realtime.
       }
-  }, [gameState, players, currentDrawerId]); // Zależności hooka
+  }, [gameState, players, currentDrawerId, isPlayerTurn, timeLeft, round]); // Added all relevant states to dependencies
+
 
   // Placeholder dla logiki wysyłania wiadomości w multiplayer
   const handleSendMessage = (messageText: string) => {
       console.log("Wiadomość wysłana w multiplayer:", messageText);
       // TODO: Zaimplementować wysyłanie wiadomości przez Supabase Realtime
       // TODO: Zaimplementować logikę zgadywania słowa w multiplayer
-      // Jeśli wiadomość jest poprawnym zgadnięciem, zakończ rundę i przyznaj punkty
   };
 
   // Funkcja do opuszczenia gry (dezercja)
