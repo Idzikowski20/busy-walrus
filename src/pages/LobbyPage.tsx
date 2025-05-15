@@ -63,8 +63,8 @@ const LobbyPage = () => {
           // Jeśli status zmienił się na 'in-game', przekieruj gracza
           if (updatedLobby.status === 'in-game') {
             toast.info("Gra się rozpoczyna!");
-            // TODO: Zmień na odpowiednią trasę gry multiplayer, przekazując ID lobby
-            navigate(`/game/solo`); // Tymczasowo przekierowujemy do gry solo
+            // Przekieruj do dedykowanej trasy gry multiplayer, przekazując ID lobby
+            navigate(`/game/multiplayer/${lobbyId}`);
           }
           // Możesz też zaktualizować cache react-query, jeśli potrzebujesz
           queryClient.invalidateQueries({ queryKey: ["lobby", lobbyId] });
@@ -144,22 +144,29 @@ const LobbyPage = () => {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user || !lobbyId) throw new Error("User not logged in or lobby ID missing");
 
-          const { error } = await supabase
+          // Sprawdź, czy opuszczający gracz jest twórcą i czy lobby jest w statusie 'waiting'
+          const isCreatorLeavingWaitingLobby = lobby?.creator_id === user.id && lobby?.status === 'waiting';
+
+          // Usuń gracza z lobby_players
+          const { error: deletePlayerError } = await supabase
             .from("lobby_players")
             .delete()
             .eq("lobby_id", lobbyId)
             .eq("user_id", user.id);
 
-          if (error) throw error;
+          if (deletePlayerError) throw deletePlayerError;
 
-          // Jeśli gracz był twórcą i nie ma innych graczy, usuń lobby
-          if (lobby?.creator_id === user.id && playersWithProfiles?.length === 1) {
-               await supabase.from("lobbies").delete().eq("id", lobbyId);
+          // Jeśli twórca opuścił lobby w statusie 'waiting', usuń lobby
+          if (isCreatorLeavingWaitingLobby) {
+               const { error: deleteLobbyError } = await supabase.from("lobbies").delete().eq("id", lobbyId);
+               if (deleteLobbyError) throw deleteLobbyError;
+          } else {
+              // Jeśli nie usuwamy lobby, po prostu odśwież listę graczy
+              queryClient.invalidateQueries({ queryKey: ["lobbyPlayers", lobbyId] });
           }
       },
       onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["lobbies"] });
-          queryClient.invalidateQueries({ queryKey: ["lobbyPlayers", lobbyId] });
           toast.info("Opuszczono lobby.");
           navigate("/lobbies"); // Wróć do listy lobby
       },
@@ -203,6 +210,8 @@ const LobbyPage = () => {
   };
 
   const isCreator = currentUserId && lobby?.creator_id === currentUserId;
+  // Możliwość rozpoczęcia gry tylko gdy jest co najmniej 2 graczy i wszyscy są gotowi (TODO: dodać status gotowości)
+  // Na razie sprawdzamy tylko liczbę graczy
   const canStartGame = isCreator && (playersWithProfiles?.length || 0) >= 2;
 
 
@@ -225,7 +234,7 @@ const LobbyPage = () => {
             {playersWithProfiles?.map(player => (
               <li key={player.id} className="text-lg">
                 {/* Wyświetl pseudonim z profilu, jeśli dostępny, w przeciwnym razie user_id */}
-                {player.profiles?.first_name || player.user_id} {player.profiles?.last_name}
+                {player.profiles?.first_name || player.user_id}
                 {player.user_id === lobby.creator_id && " (Twórca)"}
               </li>
             ))}
@@ -239,7 +248,7 @@ const LobbyPage = () => {
                   onClick={handleStartGame}
                   disabled={!canStartGame || startGameMutation.isPending}
               >
-                  {startGameGameMutation.isPending ? "Rozpoczynanie..." : "Rozpocznij Grę"}
+                  {startGameMutation.isPending ? "Rozpoczynanie..." : "Rozpocznij Grę"}
               </Button>
           )}
           <Button

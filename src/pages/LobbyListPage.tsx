@@ -15,13 +15,20 @@ interface Lobby {
   creator_id: string;
 }
 
+interface LobbyPlayer {
+    id: string;
+    lobby_id: string;
+    user_id: string;
+}
+
+
 const LobbyListPage = () => {
   const [newLobbyName, setNewLobbyName] = useState("");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // Fetch lobbies
-  const { data: lobbies, isLoading, error } = useQuery<Lobby[]>({
+  const { data: lobbies, isLoading: isLoadingLobbies, error: lobbiesError } = useQuery<Lobby[]>({
     queryKey: ["lobbies"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -34,6 +41,26 @@ const LobbyListPage = () => {
     },
     refetchInterval: 5000, // Odświeżaj listę co 5 sekund
   });
+
+  // Fetch all players in waiting lobbies
+  const { data: lobbyPlayers, isLoading: isLoadingPlayers, error: playersError } = useQuery<LobbyPlayer[]>({
+      queryKey: ["allLobbyPlayers"],
+      queryFn: async () => {
+          // Pobierz ID wszystkich lobby w statusie 'waiting'
+          const waitingLobbyIds = lobbies?.map(l => l.id) || [];
+          if (waitingLobbyIds.length === 0) return [];
+
+          // Pobierz wszystkich graczy z tych lobby
+          const { data, error } = await supabase
+            .from("lobby_players")
+            .select("lobby_id, user_id"); // Potrzebujemy tylko lobby_id i user_id
+          if (error) throw error;
+          return data;
+      },
+      enabled: !!lobbies && lobbies.length > 0, // Uruchom zapytanie tylko gdy są jakieś lobby
+      refetchInterval: 5000, // Odświeżaj listę graczy co 5 sekund
+  });
+
 
   // Create lobby mutation
   const createLobbyMutation = useMutation({
@@ -51,6 +78,7 @@ const LobbyListPage = () => {
     },
     onSuccess: (newlyCreatedLobby) => {
       queryClient.invalidateQueries({ queryKey: ["lobbies"] });
+      queryClient.invalidateQueries({ queryKey: ["allLobbyPlayers"] }); // Odśwież listę graczy
       toast.success(`Lobby "${newLobbyName}" stworzone!`);
       setNewLobbyName("");
       // Przekieruj do nowo stworzonego lobby
@@ -93,6 +121,7 @@ const LobbyListPage = () => {
     },
     onSuccess: (_, lobbyId) => {
       queryClient.invalidateQueries({ queryKey: ["lobbies"] });
+      queryClient.invalidateQueries({ queryKey: ["allLobbyPlayers"] }); // Odśwież listę graczy
       toast.success("Dołączono do lobby!");
       navigate(`/lobby/${lobbyId}`);
     },
@@ -114,8 +143,16 @@ const LobbyListPage = () => {
     joinLobbyMutation.mutate(lobbyId);
   };
 
-  if (isLoading) return <div>Ładowanie lobby...</div>;
-  if (error) return <div>Wystąpił błąd podczas ładowania lobby: {error.message}</div>;
+  // Filtruj lobby, aby wyświetlać tylko te, w których obecny jest twórca
+  const filteredLobbies = lobbies?.filter(lobby =>
+      lobbyPlayers?.some(player => player.lobby_id === lobby.id && player.user_id === lobby.creator_id)
+  );
+
+
+  if (isLoadingLobbies || isLoadingPlayers) return <div>Ładowanie lobby...</div>;
+  if (lobbiesError) return <div>Wystąpił błąd podczas ładowania lobby: {lobbiesError.message}</div>;
+  if (playersError) return <div>Wystąpił błąd podczas ładowania graczy w lobby: {playersError.message}</div>;
+
 
   return (
     <div className="container mx-auto p-4">
@@ -146,10 +183,10 @@ const LobbyListPage = () => {
 
       {/* Lista dostępnych lobby */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {lobbies?.length === 0 ? (
+        {filteredLobbies?.length === 0 ? (
           <p className="text-center col-span-full">Brak dostępnych lobby. Stwórz nowe!</p>
         ) : (
-          lobbies?.map((lobby) => (
+          filteredLobbies?.map((lobby) => (
             <Card key={lobby.id}>
               <CardHeader>
                 <CardTitle>{lobby.name}</CardTitle>
