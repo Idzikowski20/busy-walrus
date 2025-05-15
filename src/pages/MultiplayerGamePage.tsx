@@ -43,6 +43,9 @@ interface LobbyPlayer {
     } | null;
 }
 
+// Lista przykładowych słów (tymczasowo tutaj, docelowo może być w bazie/funkcji)
+const WORDS = ['słoń', 'dom', 'drzewo', 'samochód', 'kwiat', 'książka', 'pies', 'kot', 'mysz', 'krzesło', 'stół', 'lampa'];
+
 
 const MultiplayerGamePage = () => {
   const { id: lobbyId } = useParams<{ id: string }>();
@@ -51,7 +54,7 @@ const MultiplayerGamePage = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [gameChannel, setGameChannel] = useState<RealtimeChannel | null>(null); // Kanał Realtime dla gry
 
-  // Stany gry (na razie uproszczone dla multiplayer)
+  // Stany gry
   const [gameState, setGameState] = useState<'loading' | 'in-game' | 'game-ended'>('loading');
   const [currentWord, setCurrentWord] = useState(''); // Słowo do rysowania/zgadnięcia
   const [maskedWord, setMaskedWord] = useState(''); // Zamaskowane słowo
@@ -59,7 +62,9 @@ const MultiplayerGamePage = () => {
   const [round, setRound] = useState(1); // Aktualna runda
   const [maxRounds, setMaxRounds] = useState(10); // Maksymalna liczba rund
   const [players, setPlayers] = useState<Player[]>([]); // Lista graczy w grze
-  const [isPlayerTurn, setIsPlayerTurn] = useState(false); // Czy to tura aktualnego gracza?
+  const [currentDrawerId, setCurrentDrawerId] = useState<string | null>(null); // ID gracza, który aktualnie rysuje
+  const isPlayerTurn = currentUserId === currentDrawerId; // Czy to tura aktualnego gracza?
+
 
   // Stany dla czatu (na razie placeholder)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -118,7 +123,7 @@ const MultiplayerGamePage = () => {
           name: lp.profiles?.first_name || lp.user_id, // Użyj pseudonimu lub user_id
           score: 0, // Wynik początkowy
           isDrawing: false, // Ustawiane w logice gry
-          isBot: false,
+          isBot: false, // W multiplayer nie ma botów
       })) || [];
 
       setPlayers(playersList);
@@ -132,12 +137,25 @@ const MultiplayerGamePage = () => {
   // Mutation do aktualizacji statystyk gracza (wygrane/przegrane/dezercje)
   const updatePlayerStatsMutation = useMutation({
       mutationFn: async ({ userId, wins = 0, losses = 0, desertions = 0 }: { userId: string; wins?: number; losses?: number; desertions?: number }) => {
+          // Pobierz aktualne statystyki przed aktualizacją
+          const { data: currentStats, error: fetchError } = await supabase
+            .from("profiles")
+            .select("wins, losses, desertions")
+            .eq("id", userId)
+            .single();
+
+          if (fetchError) {
+              console.error("Error fetching profile for stats update:", fetchError);
+              // Kontynuuj z domyślnymi 0, jeśli nie udało się pobrać
+              currentStats = { wins: 0, losses: 0, desertions: 0 };
+          }
+
           const { data, error } = await supabase
             .from("profiles")
             .update({
-                wins: (profile?.wins || 0) + wins, // Zakładamy, że profile jest dostępne w stanie komponentu lub pobrane
-                losses: (profile?.losses || 0) + losses,
-                desertions: (profile?.desertions || 0) + desertions,
+                wins: (currentStats?.wins || 0) + wins,
+                losses: (currentStats?.losses || 0) + losses,
+                desertions: (currentStats?.desertions || 0) + desertions,
             })
             .eq("id", userId);
 
@@ -151,25 +169,6 @@ const MultiplayerGamePage = () => {
       onError: (err) => {
           console.error("Błąd podczas aktualizacji statystyk:", err.message);
       }
-  });
-
-  // Fetch current user's profile to get current stats for updating
-  const { data: profile } = useQuery({
-      queryKey: ["profile", currentUserId],
-      queryFn: async () => {
-          if (!currentUserId) return null;
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("wins, losses, desertions")
-            .eq("id", currentUserId)
-            .single();
-          if (error) {
-              console.error("Error fetching profile for stats update:", error);
-              return null;
-          }
-          return data;
-      },
-      enabled: !!currentUserId,
   });
 
 
@@ -248,7 +247,7 @@ const MultiplayerGamePage = () => {
         setGameChannel(null);
       }
     };
-  }, [lobbyId, gameState, players, currentUserId, navigate, updatePlayerStatsMutation, queryClient, profile]); // Dodano zależności
+  }, [lobbyId, gameState, players, currentUserId, navigate, updatePlayerStatsMutation, queryClient]); // Dodano zależności
 
   // Efekt do maskowania słowa (pierwsza i ostatnia litera widoczna) - skopiowane z gry solo
   useEffect(() => {
@@ -266,11 +265,27 @@ const MultiplayerGamePage = () => {
     }
   }, [currentWord]);
 
+  // --- Logika gry multiplayer (podstawowa inicjacja) ---
+  useEffect(() => {
+      if (gameState === 'in-game' && players.length > 0 && currentDrawerId === null) {
+          // Gra się rozpoczęła i gracze są załadowani, ale pierwszy rysujący nie został wybrany
+          // Wybierz losowo pierwszego gracza do rysowania
+          const firstDrawer = players[Math.floor(Math.random() * players.length)];
+          setCurrentDrawerId(firstDrawer.id);
+          setRound(1); // Rozpocznij pierwszą rundę
+          setTimeLeft(60); // Ustaw czas na rundę
+          setChatMessages([{ id: 1, sender: 'System', text: `Rozpoczęto grę! Rysuje: ${firstDrawer.name}` }]);
+          // TODO: W tym miejscu gracz rysujący powinien wybrać słowo, a pozostali zobaczyć zamaskowane słowo.
+          // To będzie wymagało synchronizacji przez Realtime.
+      }
+  }, [gameState, players, currentDrawerId]); // Zależności hooka
+
   // Placeholder dla logiki wysyłania wiadomości w multiplayer
   const handleSendMessage = (messageText: string) => {
       console.log("Wiadomość wysłana w multiplayer:", messageText);
       // TODO: Zaimplementować wysyłanie wiadomości przez Supabase Realtime
       // TODO: Zaimplementować logikę zgadywania słowa w multiplayer
+      // Jeśli wiadomość jest poprawnym zgadnięciem, zakończ rundę i przyznaj punkty
   };
 
   // Funkcja do opuszczenia gry (dezercja)
@@ -318,23 +333,23 @@ const MultiplayerGamePage = () => {
       {/* TODO: Zaimplementować pełną logikę gry multiplayer (tury, rysowanie, zgadywanie, punkty) */}
       <GameLayout
         canvasRef={canvasRef}
-        isDrawing={isDrawing} // Placeholder
-        setIsDrawing={setIsDrawing} // Placeholder
-        lastPoint={lastPoint} // Placeholder
-        setLastPoint={setLastPoint} // Placeholder
-        currentWord={currentWord} // Placeholder
-        maskedWord={maskedWord} // Placeholder
-        timeLeft={timeLeft} // Placeholder
-        round={round} // Placeholder
+        isDrawing={isDrawing} // Placeholder - będzie synchronizowane przez Realtime
+        setIsDrawing={setIsDrawing} // Placeholder - będzie synchronizowane przez Realtime
+        lastPoint={lastPoint} // Placeholder - będzie synchronizowane przez Realtime
+        setLastPoint={setLastPoint} // Placeholder - będzie synchronizowane przez Realtime
+        currentWord={currentWord} // Placeholder - będzie synchronizowane przez Realtime
+        maskedWord={maskedWord} // Placeholder - będzie synchronizowane przez Realtime
+        timeLeft={timeLeft} // Placeholder - będzie synchronizowane przez Realtime
+        round={round} // Placeholder - będzie synchronizowane przez Realtime
         maxRounds={maxRounds} // Placeholder
-        players={players} // Lista graczy
-        chatMessages={chatMessages} // Placeholder
+        players={players.map(p => ({ ...p, isDrawing: p.id === currentDrawerId }))} // Oznacz aktualnie rysującego
+        chatMessages={chatMessages} // Placeholder - będzie synchronizowane przez Realtime
         newMessage={newMessage} // Placeholder
         setNewMessage={setNewMessage} // Placeholder
-        handleSendMessage={handleSendMessage} // Placeholder
+        handleSendMessage={handleSendMessage} // Placeholder - będzie wysyłać przez Realtime
         chatMessagesEndRef={chatMessagesEndRef} // Placeholder
-        isPlayerTurn={isPlayerTurn} // Placeholder
-        gameState={gameState === 'in-game' ? 'player-drawing' : 'idle'} // Uproszczony stan dla layoutu
+        isPlayerTurn={isPlayerTurn} // Przekazujemy informację, czy to tura gracza
+        gameState={gameState === 'in-game' ? (isPlayerTurn ? 'player-drawing' : 'bot-drawing') : gameState} // Uproszczony stan dla layoutu (bot-drawing symuluje zgadywanie)
       />
 
       {/* Okno dialogowe końca gry/dezercji */}
