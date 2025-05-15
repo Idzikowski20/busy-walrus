@@ -68,20 +68,35 @@ const LobbyListPage = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not logged in");
 
-      const { data, error } = await supabase
+      // 1. Create the lobby
+      const { data: newlyCreatedLobby, error: createLobbyError } = await supabase
         .from("lobbies")
         .insert({ name, creator_id: user.id })
         .select()
         .single();
-      if (error) throw error;
-      return data;
+      if (createLobbyError) throw createLobbyError;
+
+      // 2. Add the creator to the lobby_players table
+      const { error: addCreatorError } = await supabase
+        .from("lobby_players")
+        .insert({ lobby_id: newlyCreatedLobby.id, user_id: user.id });
+
+      if (addCreatorError) {
+          console.error("Error adding creator to lobby_players:", addCreatorError);
+          // Możesz zdecydować, czy chcesz usunąć lobby, jeśli dodanie gracza się nie powiedzie
+          // Na razie po prostu zgłosimy błąd
+          throw addCreatorError;
+      }
+
+      return newlyCreatedLobby; // Return the created lobby data
     },
-    onSuccess: (newlyCreatedLobby) => {
+    onSuccess: (newlyCreatedLobby) => { // newlyCreatedLobby is now available here
       queryClient.invalidateQueries({ queryKey: ["lobbies"] });
-      queryClient.invalidateQueries({ queryKey: ["allLobbyPlayers"] }); // Odśwież listę graczy
+      queryClient.invalidateQueries({ queryKey: ["allLobbyPlayers"] });
+      // Invalidate the specific lobbyPlayers query for the new lobby to update the list in LobbyPage
+      queryClient.invalidateQueries({ queryKey: ["lobbyPlayers", newlyCreatedLobby.id] });
       toast.success(`Lobby "${newLobbyName}" stworzone!`);
       setNewLobbyName("");
-      // Przekieruj do nowo stworzonego lobby
       navigate(`/lobby/${newlyCreatedLobby.id}`);
     },
     onError: (err) => {
@@ -122,6 +137,8 @@ const LobbyListPage = () => {
     onSuccess: (_, lobbyId) => {
       queryClient.invalidateQueries({ queryKey: ["lobbies"] });
       queryClient.invalidateQueries({ queryKey: ["allLobbyPlayers"] }); // Odśwież listę graczy
+      // Invalidate the specific lobbyPlayers query for the joined lobby
+      queryClient.invalidateQueries({ queryKey: ["lobbyPlayers", lobbyId] });
       toast.success("Dołączono do lobby!");
       navigate(`/lobby/${lobbyId}`);
     },

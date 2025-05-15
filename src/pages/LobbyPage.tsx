@@ -105,30 +105,19 @@ const LobbyPage = () => {
       // 1. Fetch lobby players to get user_ids
       const { data: lobbyPlayers, error: lobbyPlayersError } = await supabase
         .from("lobby_players")
-        .select("id, lobby_id, user_id, joined_at, is_ready") // Select necessary fields including user_id
+        .select("id, lobby_id, user_id, joined_at, is_ready, profiles(first_name, last_name)") // Select necessary fields including user_id and profile
         .eq("lobby_id", lobbyId);
 
       if (lobbyPlayersError) throw lobbyPlayersError;
 
       if (!lobbyPlayers || lobbyPlayers.length === 0) return [];
 
-      // Extract user_ids
-      const userIds = lobbyPlayers.map(p => p.user_id);
-
-      // 2. Fetch profiles for these user_ids
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, first_name, last_name")
-        .in("id", userIds); // profiles.id is the user_id
-
-      if (profilesError) throw profilesError;
-
-      // 3. Map profiles back to lobby players
+      // Map profiles back to lobby players
       const playersWithProfiles = lobbyPlayers.map(lp => {
-        const profile = profiles?.find(p => p.id === lp.user_id);
+        // Profile data is already nested due to the select query
         return {
           ...lp,
-          profiles: profile || null // Attach profile data
+          profiles: lp.profiles // profiles is already attached
         };
       });
 
@@ -144,7 +133,7 @@ const LobbyPage = () => {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user || !lobbyId) throw new Error("User not logged in or lobby ID missing");
 
-          // Sprawdź, czy opuszczający gracz jest twórcą i czy lobby jest w statusie 'waiting'
+          // Check if the leaving player is the creator AND the lobby is still waiting
           const isCreatorLeavingWaitingLobby = lobby?.creator_id === user.id && lobby?.status === 'waiting';
 
           // Usuń gracza z lobby_players
@@ -156,19 +145,22 @@ const LobbyPage = () => {
 
           if (deletePlayerError) throw deletePlayerError;
 
-          // Jeśli twórca opuścił lobby w statusie 'waiting', usuń lobby
+          // If creator left a waiting lobby, delete the lobby itself
           if (isCreatorLeavingWaitingLobby) {
                const { error: deleteLobbyError } = await supabase.from("lobbies").delete().eq("id", lobbyId);
                if (deleteLobbyError) throw deleteLobbyError;
           } else {
-              // Jeśli nie usuwamy lobby, po prostu odśwież listę graczy
+              // If not deleting the lobby (either not creator or game started),
+              // just invalidate the player list for this lobby to update the UI for others
               queryClient.invalidateQueries({ queryKey: ["lobbyPlayers", lobbyId] });
           }
       },
       onSuccess: () => {
+          // Invalidate lobbies list to potentially remove the deleted lobby
           queryClient.invalidateQueries({ queryKey: ["lobbies"] });
+          // No need to invalidate lobbyPlayers here, it's done in mutationFn based on whether lobby was deleted
           toast.info("Opuszczono lobby.");
-          navigate("/lobbies"); // Wróć do listy lobby
+          navigate("/lobbies"); // Go back to lobby list
       },
       onError: (err) => {
           toast.error(`Błąd podczas opuszczania lobby: ${err.message}`);
