@@ -18,6 +18,10 @@ const GameModesPage = () => {
     // navigate('/game/ranked');
   };
 
+  const handleProfileClick = () => {
+    navigate('/profile'); // Przekierowanie do strony profilu
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-green-400 text-white p-4">
       <h1 className="text-4xl font-bold mb-8 text-center">Wybierz tryb gry</h1>
@@ -40,6 +44,14 @@ const GameModesPage = () => {
           className="px-8 py-4 text-xl bg-white text-green-600 hover:bg-gray-200 border-2 border-black shadow-md"
         >
           Rankingowa multiplayer
+        </Button>
+        {/* Nowy przycisk do strony profilu */}
+        <Button
+          onClick={handleProfileClick}
+          className="px-8 py-4 text-xl bg-white text-green-600 hover:bg-gray-200 border-2 border-black shadow-md"
+          variant="outline" // Możesz użyć innego wariantu, aby się wyróżniał
+        >
+          Mój Profil
         </Button>
       </div>
     </div>

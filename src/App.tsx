@@ -10,6 +10,7 @@ import LandingPage from "./pages/LandingPage";
 import GameModesPage from "./pages/GameModes";
 import LobbyListPage from "./pages/LobbyListPage"; // Import LobbyListPage
 import LobbyPage from "./pages/LobbyPage"; // Import LobbyPage
+import ProfilePage from "./pages/ProfilePage"; // Import ProfilePage
 import { supabase } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { Session } from "@supabase/supabase-js";
@@ -69,6 +70,7 @@ const App = () => (
             <Route path="/lobbies" element={<ProtectedRoute><LobbyListPage /></ProtectedRoute>} /> {/* Trasa dla listy lobby */}
             <Route path="/lobby/:id" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} /> {/* Trasa dla pojedynczego lobby */}
             <Route path="/game/solo" element={<ProtectedRoute><Index /></ProtectedRoute>} /> {/* Trasa dla gry solo */}
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} /> {/* Nowa trasa dla strony profilu */}
             {/* TODO: Dodać trasę dla gry multiplayer, np. /game/multiplayer/:lobbyId */}
             {/* ADD ALL CUSTOM PROTECTED ROUTES ABOVE THIS LINE */}
 
