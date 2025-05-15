@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Import useEffect
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -26,6 +26,16 @@ const LobbyListPage = () => {
   const [newLobbyName, setNewLobbyName] = useState("");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // Pobieramy ID aktualnego użytkownika
+
+  useEffect(() => {
+      const fetchUser = async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          setCurrentUserId(user?.id || null);
+      };
+      fetchUser();
+  }, []);
+
 
   // Fetch lobbies
   const { data: lobbies, isLoading: isLoadingLobbies, error: lobbiesError } = useQuery<Lobby[]>({
@@ -160,10 +170,22 @@ const LobbyListPage = () => {
     joinLobbyMutation.mutate(lobbyId);
   };
 
-  // Filtruj lobby, aby wyświetlać tylko te, w których obecny jest twórca
-  const filteredLobbies = lobbies?.filter(lobby =>
-      lobbyPlayers?.some(player => player.lobby_id === lobby.id && player.user_id === lobby.creator_id)
-  );
+  // Poprawione filtrowanie lobby
+  const filteredLobbies = lobbies?.filter(lobby => {
+      // Sprawdź, czy aktualny użytkownik jest w tym konkretnym lobby
+      const isCurrentUserInThisLobby = lobbyPlayers?.some(player =>
+          player.lobby_id === lobby.id && player.user_id === currentUserId
+      );
+
+      // Jeśli aktualny użytkownik jest twórcą, pokaż lobby tylko jeśli w nim jest.
+      if (lobby.creator_id === currentUserId) {
+          return isCurrentUserInThisLobby;
+      } else {
+          // Jeśli aktualny użytkownik NIE jest twórcą, pokaż lobby tylko jeśli go w nim NIE ma.
+          return !isCurrentUserInThisLobby;
+      }
+  });
+
 
   // Funkcja do zliczania graczy w danym lobby
   const countPlayersInLobby = (lobbyId: string) => {
