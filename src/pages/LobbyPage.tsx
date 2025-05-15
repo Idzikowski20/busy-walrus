@@ -15,7 +15,7 @@ interface Lobby {
 }
 
 interface LobbyPlayer {
-    id: string;
+    id: string; // id z tabeli lobby_players
     lobby_id: string;
     user_id: string;
     joined_at: string; // Dodano joined_at
@@ -156,9 +156,9 @@ const LobbyPage = () => {
           }
       },
       onSuccess: () => {
-          // Invalidate lobbies list to potentially remove the deleted lobby
+          // Zawsze unieważnij listę lobby i listę wszystkich graczy w lobby po opuszczeniu
           queryClient.invalidateQueries({ queryKey: ["lobbies"] });
-          // No need to invalidate lobbyPlayers here, it's done in mutationFn based on whether lobby was deleted
+          queryClient.invalidateQueries({ queryKey: ["allLobbyPlayers"] });
           toast.info("Opuszczono lobby.");
           navigate("/lobbies"); // Go back to lobby list
       },
