@@ -27,6 +27,7 @@ const SoloGamePage = () => {
   // Stan gry
   const [gameState, setGameState] = useState<'idle' | 'word-selection' | 'player-drawing' | 'bot-drawing' | 'end-of-round'>('idle');
   const [currentWord, setCurrentWord] = useState('');
+  // Stan dla zamaskowanego słowa (obliczany tutaj)
   const [maskedWord, setMaskedWord] = useState('');
   const [timeLeft, setTimeLeft] = useState(60);
   const [round, setRound] = useState(1);
@@ -114,17 +115,23 @@ const SoloGamePage = () => {
     return () => clearInterval(timer); // Czyszczenie timera
   }, [timeLeft, gameState]); // Zależność od timeLeft i gameState
 
-  // Efekt do maskowania słowa
+  // Efekt do maskowania słowa (pierwsza i ostatnia litera widoczna)
   useEffect(() => {
-    if (currentWord && gameState !== 'player-drawing') { // Maskuj słowo tylko gdy rysuje gracz
-       setMaskedWord(currentWord[0] + '_'.repeat(currentWord.length - 1));
-    } else if (currentWord && gameState === 'bot-drawing') {
-       setMaskedWord(currentWord); // Bot "zna" słowo, więc nie maskujemy dla niego
-    }
-    else {
+    if (currentWord) {
+      if (currentWord.length <= 2) {
+        // Jeśli słowo ma 1 lub 2 litery, wyświetl całe
+        setMaskedWord(currentWord);
+      } else {
+        // Maskuj: pierwsza litera + podkreślniki + ostatnia litera
+        const firstLetter = currentWord[0];
+        const lastLetter = currentWord[currentWord.length - 1];
+        const maskedPart = '_'.repeat(currentWord.length - 2);
+        setMaskedWord(firstLetter + maskedPart + lastLetter);
+      }
+    } else {
       setMaskedWord('');
     }
-  }, [currentWord, gameState]);
+  }, [currentWord]); // Zależność od currentWord
 
   // Logika wyboru 3 słów dla gracza
   const selectWordsToChoose = () => {
@@ -167,15 +174,13 @@ const SoloGamePage = () => {
 
   // Funkcja do obsługi zgadywania słowa przez gracza (przez czat)
   const handlePlayerGuess = (guess: string) => {
-    if (gameState !== 'player-drawing' && gameState !== 'bot-drawing') return false; // Gracz może zgadywać tylko gdy ktoś rysuje
+    // Gracz może zgadywać tylko gdy rysuje bot
+    if (gameState !== 'bot-drawing') return false;
 
     if (guess.toLowerCase() === currentWord.toLowerCase()) {
       console.log('Gracz zgadł!');
-      // W trybie solo, gracz zgaduje tylko gdy rysuje bot
-      if (!isPlayerTurn) {
-         endRound(true, 'player'); // Gracz zgadł
-         return true; // Zgadywanie udane
-      }
+      endRound(true, 'player'); // Gracz zgadł
+      return true; // Zgadywanie udane
     }
     return false; // Zgadywanie nieudane
   };
@@ -248,17 +253,19 @@ const SoloGamePage = () => {
       };
       setChatMessages(prevMessages => [...prevMessages, newMessage]);
 
-      // Sprawdź, czy wiadomość jest zgadywaniem
-      const guessSuccessful = handlePlayerGuess(messageText.trim());
+      // Sprawdź, czy wiadomość jest zgadywaniem (tylko gdy rysuje bot)
+      if (!isPlayerTurn) {
+          const guessSuccessful = handlePlayerGuess(messageText.trim());
 
-      if (guessSuccessful) {
-        // Jeśli gracz zgadł, dodaj wiadomość systemową
-         const successMessage: ChatMessage = {
-           id: chatMessages.length + 2,
-           sender: 'System',
-           text: `Gracz Ty odgadł słowo!`, // Zastąp 'Ty' rzeczywistym imieniem
-         };
-         setChatMessages((prevMessages) => [...prevMessages, successMessage]);
+          if (guessSuccessful) {
+            // Jeśli gracz zgadł, dodaj wiadomość systemową
+             const successMessage: ChatMessage = {
+               id: chatMessages.length + 2,
+               sender: 'System',
+               text: `Gracz Ty odgadł słowo!`, // Zastąp 'Ty' rzeczywistym imieniem
+             };
+             setChatMessages((prevMessages) => [...prevMessages, successMessage]);
+          }
       }
   };
 
@@ -273,7 +280,7 @@ const SoloGamePage = () => {
         lastPoint={lastPoint}
         setLastPoint={setLastPoint}
         currentWord={currentWord}
-        maskedWord={maskedWord}
+        maskedWord={maskedWord} // Przekazujemy zamaskowane słowo
         timeLeft={timeLeft}
         round={round}
         maxRounds={maxRounds}
@@ -284,6 +291,7 @@ const SoloGamePage = () => {
         handleSendMessage={handleSendMessage} // Przekazujemy funkcję do wysyłania wiadomości
         chatMessagesEndRef={chatMessagesEndRef}
         isPlayerTurn={isPlayerTurn} // Przekazujemy informację, czy to tura gracza
+        gameState={gameState} // Przekazujemy stan gry
       />
 
       {/* Okno dialogowe wyboru słowa dla gracza */}
