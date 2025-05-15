@@ -3,11 +3,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index"; // Zmienimy przeznaczenie Index.tsx później
+import Index from "./pages/Index"; // Solo Game Page
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
-import LandingPage from "./pages/LandingPage"; // Import LandingPage
-import GameModesPage from "./pages/GameModes"; // Import GameModesPage (stworzymy za chwilę)
+import LandingPage from "./pages/LandingPage";
+import GameModesPage from "./pages/GameModes";
+import LobbyListPage from "./pages/LobbyListPage"; // Import LobbyListPage
+import LobbyPage from "./pages/LobbyPage"; // Import LobbyPage
 import { supabase } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { Session } from "@supabase/supabase-js";
@@ -63,10 +65,11 @@ const App = () => (
             {/* ADD ALL CUSTOM PUBLIC ROUTES ABOVE THIS LINE */}
 
             {/* Trasy chronione - wymagają zalogowania */}
-            {/* Strona wyboru trybu gry (chroniona) */}
             <Route path="/game-modes" element={<ProtectedRoute><GameModesPage /></ProtectedRoute>} />
-            {/* Trasa dla gry solo (chroniona) - stworzymy komponent SoloGame.tsx później */}
-            <Route path="/game/solo" element={<ProtectedRoute><Index /></ProtectedRoute>} /> {/* Na razie używamy Index jako placeholder */}
+            <Route path="/lobbies" element={<ProtectedRoute><LobbyListPage /></ProtectedRoute>} /> {/* Trasa dla listy lobby */}
+            <Route path="/lobby/:id" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} /> {/* Trasa dla pojedynczego lobby */}
+            <Route path="/game/solo" element={<ProtectedRoute><Index /></ProtectedRoute>} /> {/* Trasa dla gry solo */}
+            {/* TODO: Dodać trasę dla gry multiplayer, np. /game/multiplayer/:lobbyId */}
             {/* ADD ALL CUSTOM PROTECTED ROUTES ABOVE THIS LINE */}
 
             {/* Catch-all route */}

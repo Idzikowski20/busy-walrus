@@ -9,9 +9,7 @@ const GameModesPage = () => {
   };
 
   const handleMultiplayerPlay = () => {
-    // TODO: Zaimplementować logikę dla trybu multiplayer
-    console.log("Rozpoczęto grę multiplayer (placeholder)");
-    // navigate('/game/multiplayer');
+    navigate('/lobbies'); // Przekierowanie do listy lobby
   };
 
   const handleRankedPlay = () => {
