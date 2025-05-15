@@ -3,11 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
+import Index from "./pages/Index"; // Zmienimy przeznaczenie Index.tsx później
 import NotFound from "./pages/NotFound";
-import AuthPage from "./pages/Auth"; // Import nowej strony Auth
-import { supabase } from "./integrations/supabase/client"; // Import klienta Supabase
-// Usunięto: import { SessionContextProvider } from '@supabase/auth-ui-react'; // Import SessionContextProvider
+import AuthPage from "./pages/Auth";
+import LandingPage from "./pages/LandingPage"; // Import LandingPage
+import GameModesPage from "./pages/GameModes"; // Import GameModesPage (stworzymy za chwilę)
+import { supabase } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { Session } from "@supabase/supabase-js";
 
@@ -51,23 +52,27 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      {/* Usunięto: <SessionContextProvider supabaseClient={supabase}> */}
         <BrowserRouter>
           <Routes>
-            {/* Trasy chronione - wymagają zalogowania */}
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            {/* ADD ALL CUSTOM PROTECTED ROUTES ABOVE THIS LINE */}
+            {/* Strona główna (Landing Page) */}
+            <Route path="/" element={<LandingPage />} />
 
             {/* Trasy publiczne - nie wymagają zalogowania */}
             <Route path="/login" element={<AuthPage />} />
-            <Route path="/register" element={<AuthPage />} /> {/* Używamy tej samej strony AuthPage */}
+            <Route path="/register" element={<AuthPage />} />
             {/* ADD ALL CUSTOM PUBLIC ROUTES ABOVE THIS LINE */}
+
+            {/* Trasy chronione - wymagają zalogowania */}
+            {/* Strona wyboru trybu gry (chroniona) */}
+            <Route path="/game-modes" element={<ProtectedRoute><GameModesPage /></ProtectedRoute>} />
+            {/* Trasa dla gry solo (chroniona) - stworzymy komponent SoloGame.tsx później */}
+            <Route path="/game/solo" element={<ProtectedRoute><Index /></ProtectedRoute>} /> {/* Na razie używamy Index jako placeholder */}
+            {/* ADD ALL CUSTOM PROTECTED ROUTES ABOVE THIS LINE */}
 
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-      {/* Usunięto: </SessionContextProvider> */}
     </TooltipProvider>
   </QueryClientProvider>
 );

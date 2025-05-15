@@ -12,8 +12,8 @@ const AuthPage = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        // User is logged in, redirect to home
-        navigate('/');
+        // Użytkownik jest zalogowany, przekieruj do strony wyboru trybu gry
+        navigate('/game-modes');
       }
     });
 
