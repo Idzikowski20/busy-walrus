@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner"; // Użyjemy sonner do powiadomień
 import { useNavigate } from 'react-router-dom'; // Import useNavigate do wyjścia z gry
+import { supabase } from '@/integrations/supabase/client'; // Import Supabase client
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // Import react-query hooks
 
 // Definicja typu dla wiadomości czatu
 interface ChatMessage {
@@ -21,14 +23,56 @@ interface Player {
   isBot?: boolean; // Dodajemy flagę dla bota
 }
 
+// Definicja typu dla profilu (potrzebna do aktualizacji statystyk)
+interface Profile {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    wins: number;
+    losses: number;
+    desertions: number;
+}
+
+
 // Lista przykładowych słów (rzeczy lub zwierzęta)
 const WORDS = ['słoń', 'dom', 'drzewo', 'samochód', 'kwiat', 'książka', 'pies', 'kot', 'mysz', 'krzesło', 'stół', 'lampa'];
 
 const SoloGamePage = () => {
   const navigate = useNavigate(); // Hook do nawigacji
+  const queryClient = useQueryClient(); // Hook do zarządzania cache react-query
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // Stan na ID aktualnego użytkownika
+
+  // Pobierz ID aktualnego użytkownika przy ładowaniu komponentu
+  useEffect(() => {
+      const fetchUser = async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          setCurrentUserId(user?.id || null);
+      };
+      fetchUser();
+  }, []);
+
+  // Fetch current user's profile to get current stats for updating
+  const { data: profile } = useQuery<Profile>({
+      queryKey: ["profile", currentUserId],
+      queryFn: async () => {
+          if (!currentUserId) return null;
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("wins, losses, desertions")
+            .eq("id", currentUserId)
+            .single();
+          if (error) {
+              console.error("Error fetching profile for stats update:", error);
+              return null;
+          }
+          return data;
+      },
+      enabled: !!currentUserId, // Zapytanie uruchomi się tylko gdy currentUserId jest dostępne
+  });
+
 
   // Stan gry
-  const [gameState, setGameState] = useState<'idle' | 'word-selection' | 'player-drawing' | 'bot-drawing' | 'end-of-round'>('idle');
+  const [gameState, setGameState] = useState<'idle' | 'word-selection' | 'player-drawing' | 'bot-drawing' | 'end-of-round' | 'game-ended'>('idle'); // Dodano 'game-ended'
   const [currentWord, setCurrentWord] = useState('');
   // Stan dla zamaskowanego słowa (obliczany tutaj)
   const [maskedWord, setMaskedWord] = useState('');
@@ -57,21 +101,59 @@ const SoloGamePage = () => {
   // Ref do przewijania czatu na dół (przekazywany do GameLayout)
   const chatMessagesEndRef = useRef<HTMLDivElement>(null); // Przeniesione do GameLayout
 
-  // Stan dla okna dialogowego końca rundy
+  // Stan dla okna dialogowego końca rundy/gry
   const [isEndOfRoundDialogOpen, setIsEndOfRoundDialogOpen] = useState(false);
   const [endOfRoundMessage, setEndOfRoundMessage] = useState('');
 
   // Ref do elementu audio dla dźwięku wiadomości
   const messageSoundRef = useRef<HTMLAudioElement>(null);
 
+  // Mutation do aktualizacji statystyk gracza (wygrane/przegrane/dezercje)
+  const updatePlayerStatsMutation = useMutation({
+      mutationFn: async ({ userId, wins = 0, losses = 0, desertions = 0 }: { userId: string; wins?: number; losses?: number; desertions?: number }) => {
+          if (!userId) throw new Error("User ID is not available for stats update");
+          const { data, error } = await supabase
+            .from("profiles")
+            .update({
+                wins: (profile?.wins || 0) + wins,
+                losses: (profile?.losses || 0) + losses,
+                desertions: (profile?.desertions || 0) + desertions,
+            })
+            .eq("id", userId);
+
+          if (error) throw error;
+          return data;
+      },
+      onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["profile", currentUserId] }); // Odśwież profil gracza
+          console.log("Statystyki gracza zaktualizowane.");
+      },
+      onError: (err) => {
+          console.error("Błąd podczas aktualizacji statystyk:", err.message);
+      }
+  });
+
+
   // --- Logika gry ---
 
-  // Efekt do rozpoczęcia nowej rundy
+  // Efekt do rozpoczęcia nowej rundy lub zakończenia gry
   useEffect(() => {
+    if (gameState === 'game-ended') {
+        // Gra zakończona, nic więcej nie robimy w tym efekcie
+        return;
+    }
+
     if (round > maxRounds) {
       // Koniec gry
       console.log('Koniec gry!');
-      // TODO: Zaimplementować ekran końcowy gry
+      setGameState('game-ended');
+      // TODO: Zaimplementować ekran końcowy gry z podsumowaniem wyników
+      let finalMessage = "Gra zakończona! Wyniki:\n";
+      players.forEach(p => {
+          finalMessage += `${p.name}: ${p.score} pkt\n`;
+      });
+      setEndOfRoundMessage(finalMessage); // Używamy tego samego stanu dla uproszczenia
+      setIsEndOfRoundDialogOpen(true); // Otwórz okno z wynikami końcowymi
       return;
     }
 
@@ -89,6 +171,14 @@ const SoloGamePage = () => {
     setTimeLeft(60); // Reset czasu
     setChatMessages([{ id: 1, sender: 'System', text: `Rozpoczęto rundę ${round}.` }]); // Wyczyść czat i dodaj wiadomość systemową
 
+    // Czyść canvas na początku każdej rundy
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (context && canvas) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+
     if (newPlayersState[playerIndex].id === 'player') {
       // Tura gracza - wybór słowa
       setGameState('word-selection');
@@ -99,7 +189,7 @@ const SoloGamePage = () => {
       selectBotWord();
     }
 
-  }, [round]); // Zależność od rundy
+  }, [round, gameState]); // Zależność od rundy i stanu gry
 
   // Efekt do odliczania czasu
   useEffect(() => {
@@ -206,11 +296,19 @@ const SoloGamePage = () => {
         playerPoints = Math.max(10, timeLeft * 2); // Punkty za zgadnięcie (więcej za szybsze zgadnięcie)
         botPoints = 5; // Bot dostaje punkty za narysowanie słowa, które zostało odgadnięte
         message = `Ty odgadłeś słowo! Było to: "${guessedWord}". Zdobywasz ${playerPoints} punktów! Bot zdobywa ${botPoints} punktów.`;
+        // Aktualizuj statystyki gracza - wygrana
+        if (currentUserId) {
+            updatePlayerStatsMutation.mutate({ userId: currentUserId, wins: 1 });
+        }
       } else if (guesserId === 'bot') {
          // Bot zgadł (gdy rysował gracz)
          botPoints = Math.max(10, timeLeft * 2); // Punkty dla bota za zgadnięcie
          playerPoints = 5; // Gracz dostaje punkty za narysowanie słowa, które bot zgadł
          message = `Bot odgadł słowo! Było to: "${guessedWord}". Bot zdobywa ${botPoints} punktów! Ty zdobywasz ${playerPoints} punktów.`;
+         // Aktualizuj statystyki gracza - przegrana (bo bot zgadł)
+         if (currentUserId) {
+             updatePlayerStatsMutation.mutate({ userId: currentUserId, losses: 1 });
+         }
       }
     } else {
       // Czas minął, nikt nie zgadł
@@ -218,9 +316,17 @@ const SoloGamePage = () => {
       if (isPlayerTurn) {
           playerPoints = 10; // Gracz dostaje punkty za rysowanie, nawet jeśli nikt nie zgadł
           message += ` Zdobywasz ${playerPoints} punktów!`;
+          // Aktualizuj statystyki gracza - przegrana (bo nikt nie zgadł w jego turze)
+          if (currentUserId) {
+              updatePlayerStatsMutation.mutate({ userId: currentUserId, losses: 1 });
+          }
       } else {
           botPoints = 10; // Bot dostaje punkty za rysowanie, nawet jeśli nikt nie zgadł
           message += ` Bot zdobywa ${botPoints} punktów!`;
+          // Aktualizuj statystyki gracza - przegrana (bo nie zgadł w turze bota)
+          if (currentUserId) {
+              updatePlayerStatsMutation.mutate({ userId: currentUserId, losses: 1 });
+          }
       }
     }
 
@@ -284,9 +390,12 @@ const SoloGamePage = () => {
 
   // Funkcja do opuszczenia gry (dezercja)
   const handleLeaveGame = () => {
-      // TODO: Zaimplementować logikę kary za dezercję
       console.log("Gracz opuścił grę (dezercja).");
-      toast.warning("Opuściłeś grę. Zostałeś ukarany (placeholder kary)."); // Placeholder kary
+      // Aktualizuj statystyki gracza - dezercja
+      if (currentUserId) {
+          updatePlayerStatsMutation.mutate({ userId: currentUserId, desertions: 1 });
+      }
+      toast.warning("Opuściłeś grę. Zostałeś ukarany (dezercja).");
       navigate('/game-modes'); // Przekieruj do menu wyboru trybu gry
   };
 
@@ -302,7 +411,7 @@ const SoloGamePage = () => {
 
       {/* Przycisk do opuszczenia gry */}
       <div className="absolute top-4 right-4 z-10">
-          <Button variant="outline" onClick={handleLeaveGame}>Opuść Grę</Button>
+          <Button variant="outline" onClick={handleLeaveGame} disabled={gameState === 'game-ended'}>Opuść Grę</Button>
       </div>
 
 
@@ -329,7 +438,7 @@ const SoloGamePage = () => {
       />
 
       {/* Okno dialogowe wyboru słowa dla gracza */}
-      <Dialog open={gameState === 'word-selection'} onOpenChange={(open) => { if (!open) setGameState('idle'); }}>
+      <Dialog open={gameState === 'word-selection'} onOpenChange={(open) => { if (!open && gameState === 'word-selection') setGameState('idle'); }}> {/* Dodano warunek na gameState */}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Wybierz słowo do narysowania</DialogTitle>
@@ -344,15 +453,17 @@ const SoloGamePage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Okno dialogowe końca rundy */}
-      <Dialog open={isEndOfRoundDialogOpen} onOpenChange={setIsEndOfRoundDialogOpen}>
+      {/* Okno dialogowe końca rundy/gry */}
+      <Dialog open={isEndOfRoundDialogOpen} onOpenChange={(open) => { if (!open && gameState !== 'game-ended') setIsEndOfRoundDialogOpen(false); }}> {/* Zmieniono logikę zamykania */}
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Koniec Rundy {round}</DialogTitle>
+            <DialogTitle>{gameState === 'game-ended' ? 'Koniec Gry' : `Koniec Rundy ${round}`}</DialogTitle> {/* Zmieniono tytuł */}
           </DialogHeader>
           <div className="p-4 text-center">
             <p className="text-lg">{endOfRoundMessage}</p>
-            <p className="mt-4 text-xl font-semibold">Aktualny wynik:</p>
+            {gameState !== 'game-ended' && ( // Wyświetl wyniki rundy tylko jeśli gra się nie skończyła
+                <p className="mt-4 text-xl font-semibold">Aktualny wynik:</p>
+            )}
             <ul>
                 {players.map(player => (
                     <li key={player.id}>{player.name}: {player.score} pkt</li>
@@ -360,7 +471,11 @@ const SoloGamePage = () => {
             </ul>
           </div>
           <DialogFooter>
-            <Button onClick={nextRound}>Następna Runda</Button>
+            {gameState !== 'game-ended' ? (
+                <Button onClick={nextRound}>Następna Runda</Button>
+            ) : (
+                 <Button onClick={() => navigate('/game-modes')}>Powrót do Menu</Button> // Przycisk powrotu po zakończeniu gry
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
