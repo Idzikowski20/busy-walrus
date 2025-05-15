@@ -3,6 +3,7 @@ import GameLayout from "@/components/GameLayout"; // Komponent layoutu wizualneg
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner"; // Użyjemy sonner do powiadomień
+import { useNavigate } from 'react-router-dom'; // Import useNavigate do wyjścia z gry
 
 // Definicja typu dla wiadomości czatu
 interface ChatMessage {
@@ -24,6 +25,8 @@ interface Player {
 const WORDS = ['słoń', 'dom', 'drzewo', 'samochód', 'kwiat', 'książka', 'pies', 'kot', 'mysz', 'krzesło', 'stół', 'lampa'];
 
 const SoloGamePage = () => {
+  const navigate = useNavigate(); // Hook do nawigacji
+
   // Stan gry
   const [gameState, setGameState] = useState<'idle' | 'word-selection' | 'player-drawing' | 'bot-drawing' | 'end-of-round'>('idle');
   const [currentWord, setCurrentWord] = useState('');
@@ -57,6 +60,9 @@ const SoloGamePage = () => {
   // Stan dla okna dialogowego końca rundy
   const [isEndOfRoundDialogOpen, setIsEndOfRoundDialogOpen] = useState(false);
   const [endOfRoundMessage, setEndOfRoundMessage] = useState('');
+
+  // Ref do elementu audio dla dźwięku wiadomości
+  const messageSoundRef = useRef<HTMLAudioElement>(null);
 
   // --- Logika gry ---
 
@@ -253,6 +259,13 @@ const SoloGamePage = () => {
       };
       setChatMessages(prevMessages => [...prevMessages, newMessage]);
 
+      // Odtwórz dźwięk wiadomości (jeśli element audio istnieje)
+      if (messageSoundRef.current) {
+          messageSoundRef.current.currentTime = 0; // Zresetuj czas odtwarzania, aby można było szybko odtwarzać dźwięk
+          messageSoundRef.current.play().catch(error => console.error("Error playing sound:", error));
+      }
+
+
       // Sprawdź, czy wiadomość jest zgadywaniem (tylko gdy rysuje bot)
       if (!isPlayerTurn) {
           const guessSuccessful = handlePlayerGuess(messageText.trim());
@@ -269,9 +282,30 @@ const SoloGamePage = () => {
       }
   };
 
+  // Funkcja do opuszczenia gry (dezercja)
+  const handleLeaveGame = () => {
+      // TODO: Zaimplementować logikę kary za dezercję
+      console.log("Gracz opuścił grę (dezercja).");
+      toast.warning("Opuściłeś grę. Zostałeś ukarany (placeholder kary)."); // Placeholder kary
+      navigate('/game-modes'); // Przekieruj do menu wyboru trybu gry
+  };
+
 
   return (
     <>
+      {/* Element audio dla dźwięku wiadomości - musisz dodać plik dźwiękowy! */}
+      {/* Przykład: <audio ref={messageSoundRef} src="/sounds/message_sent.mp3" /> */}
+      {/* Pamiętaj, aby dodać swoje pliki dźwiękowe do folderu public/sounds */}
+      <audio ref={messageSoundRef} src="/sounds/message_sent.mp3" /> {/* Zmień ścieżkę na swoją */}
+      {/* TODO: Dodać elementy audio dla innych dźwięków (wygrana, przegrana, przejście tury itp.) */}
+
+
+      {/* Przycisk do opuszczenia gry */}
+      <div className="absolute top-4 right-4 z-10">
+          <Button variant="outline" onClick={handleLeaveGame}>Opuść Grę</Button>
+      </div>
+
+
       {/* Przekazujemy potrzebne stany i funkcje do GameLayout */}
       <GameLayout
         canvasRef={canvasRef}
